@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MineTracer — Backtracking Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;--surface:#12161d;--surface2:#181d26;
+  --border:#1e2533;--border2:#28334a;
+  --text:#e4eaf5;--muted:#5a6a82;
+  --accent:#00e5a0;--accent2:#f5c842;
+  --danger:#ff4f4f;--info:#4d9fff;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* INTRO */
+#intro{position:fixed;inset:0;z-index:999;background:#060810;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+#intro-canvas{position:absolute;inset:0;width:100%;height:100%}
+.intro-text{position:relative;z-index:2;text-align:center;pointer-events:none}
+.intro-title{font-size:clamp(32px,7vw,80px);font-weight:800;letter-spacing:-3px;color:#fff;opacity:0;transform:translateY(30px);animation:fadeUp 0.8s 1.4s forwards}
+.intro-title span{color:var(--accent)}
+.intro-sub{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted);margin-top:12px;opacity:0;animation:fadeUp 0.8s 1.9s forwards}
+.intro-bar{width:200px;height:2px;background:var(--border2);border-radius:2px;margin:28px auto 0;overflow:hidden;opacity:0;animation:fadeUp 0.5s 2.3s forwards}
+.intro-bar-fill{height:100%;background:var(--accent);width:0%;animation:barFill 1.2s 2.5s ease forwards}
+.intro-skip{margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;opacity:0;animation:fadeUp 0.5s 2.6s forwards;border:1px solid var(--border2);padding:5px 14px;border-radius:100px;background:transparent;transition:all 0.2s;pointer-events:auto}
+.intro-skip:hover{border-color:var(--accent);color:var(--accent)}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+@keyframes barFill{to{width:100%}}
+
+/* HOW TO PLAY */
+#howtoplay{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,0.88);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:16px}
+#howtoplay.show{display:flex}
+.htp-box{background:var(--surface);border:1px solid var(--border2);border-radius:20px;max-width:600px;width:100%;overflow:hidden;animation:slideUp 0.35s ease;max-height:90vh;overflow-y:auto}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.htp-head{padding:24px 24px 0;display:flex;justify-content:space-between;align-items:flex-start}
+.htp-title{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.htp-title span{color:var(--accent)}
+.htp-body{padding:18px 24px 24px}
+.htp-steps{display:grid;gap:10px;margin-bottom:18px}
+.htp-step{display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:13px}
+.htp-icon{font-size:22px;min-width:42px;height:42px;display:flex;align-items:center;justify-content:center;background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.18);border-radius:9px;flex-shrink:0}
+.htp-step h4{font-size:13px;font-weight:600;margin-bottom:3px;color:var(--text)}
+.htp-step p{font-size:11px;color:var(--muted);line-height:1.65;font-family:'JetBrains Mono',monospace}
+.htp-leg-grid{display:flex;flex-wrap:wrap;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:18px}
+.hleg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.hdot{width:11px;height:11px;border-radius:3px;border:1px solid transparent;flex-shrink:0}
+.htp-play{width:100%;padding:13px;background:var(--accent);color:#060810;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;border:none;border-radius:9px;cursor:pointer;transition:all 0.2s}
+.htp-play:hover{background:#1ffdb8;transform:translateY(-1px)}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:13px 26px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;background:rgba(10,12,16,0.93);backdrop-filter:blur(12px)}
+.logo{font-size:16px;font-weight:800;letter-spacing:-0.5px}
+.logo span{color:var(--accent)}
+.nav-links{display:flex;gap:6px}
+.nav-btn{font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 12px;border:1px solid var(--border2);border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,0.06)}
+
+/* LAYOUT */
+.main{max-width:1120px;margin:0 auto;padding:22px 18px 60px}
+.app-grid{display:grid;grid-template-columns:265px 1fr;gap:16px;align-items:start}
+@media(max-width:780px){.app-grid{grid-template-columns:1fr}}
+
+/* PANEL */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+.ph{padding:11px 15px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+.ph .dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.pb{padding:13px}
+
+/* CONTROLS */
+.cg{margin-bottom:14px}
+.cl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+.cl span{color:var(--accent);font-weight:700}
+input[type=range]{width:100%;height:3px;-webkit-appearance:none;background:var(--border2);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+select{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:7px;padding:7px 9px;font-family:'JetBrains Mono',monospace;font-size:11px;outline:none;cursor:pointer}
+.abtns{display:flex;flex-direction:column;gap:7px}
+.abtn{width:100%;padding:9px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;border:none;transition:all 0.2s}
+.abtn-solve{background:var(--accent);color:#060810}
+.abtn-solve:hover:not(:disabled){background:#1ffdb8}
+.abtn-solve:disabled{background:#0c1e16;color:var(--muted);cursor:not-allowed}
+.abtn-gen{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.abtn-gen:hover{border-color:var(--accent2);color:var(--accent2)}
+.abtn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.abtn-ghost:hover{border-color:var(--danger);color:var(--danger)}
+
+/* STATS */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px}
+.sc{background:var(--surface2);border-radius:7px;padding:9px 11px;border:1px solid var(--border)}
+.sl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:1px}
+.sv{font-size:19px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--text)}
+.sv.a{color:var(--accent)}.sv.w{color:var(--accent2)}.sv.d{color:var(--danger)}
+
+/* LOG */
+.logbox{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);max-height:82px;overflow-y:auto;line-height:1.9}
+.ll{color:var(--accent)}.lb{color:var(--accent2)}.ld{color:#1ffdb8}.lf{color:var(--danger)}
+
+/* GRID */
+.mode-bar{display:flex;gap:5px;padding:10px 13px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.mpill{font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px;border-radius:100px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s}
+.mpill.active{border-color:var(--accent2);color:var(--accent2);background:rgba(245,200,66,0.07)}
+.mpill:hover:not(.active){color:var(--text)}
+#grid-wrap{padding:13px;overflow:auto}
+table{border-collapse:collapse;margin:0 auto}
+td{border:1px solid var(--border);text-align:center;vertical-align:middle;cursor:pointer;transition:background 0.1s;font-family:'JetBrains Mono',monospace;font-weight:700;user-select:none}
+td:hover:not(.cs):not(.ce){filter:brightness(1.4)}
+td.ce2{background:var(--surface2)}
+td.cs{background:rgba(0,229,160,0.15);border-color:var(--accent);color:var(--accent)}
+td.ce{background:rgba(77,159,255,0.15);border-color:var(--info);color:var(--info)}
+td.cm{background:#111520}
+td.cv{background:#0b1f18}
+td.cp{background:rgba(0,229,160,0.2);border-color:rgba(0,229,160,0.45);color:var(--accent)}
+td.cbk{background:#200d0d}
+td.cc{background:rgba(245,200,66,0.14);border-color:var(--accent2);color:var(--accent2);animation:blink 0.5s infinite alternate}
+@keyframes blink{from{opacity:.7}to{opacity:1}}
+.legend{display:flex;flex-wrap:wrap;gap:9px;padding:9px 13px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+.leg{display:flex;align-items:center;gap:5px}
+.ldot{width:10px;height:10px;border-radius:2px;border:1px solid transparent;flex-shrink:0}
+
+/* RESULT BANNER */
+.rbanner{display:none;margin:0 13px 13px;border-radius:9px;padding:12px 15px;font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid;line-height:1.8}
+.rbanner.ok{background:rgba(0,229,160,0.06);border-color:rgba(0,229,160,0.22);color:var(--accent)}
+.rbanner.fail{background:rgba(255,79,79,0.06);border-color:rgba(255,79,79,0.22);color:var(--danger)}
+.elink{color:var(--accent2);cursor:pointer;text-decoration:underline;font-weight:700}
+
+/* EXPLAINER OVERLAY */
+.overlay{display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.82);backdrop-filter:blur(10px);align-items:center;justify-content:center;padding:16px}
+.overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;max-width:660px;width:100%;max-height:87vh;overflow-y:auto;animation:slideUp 0.3s ease}
+.modal-top{padding:22px 24px 0;display:flex;justify-content:space-between;align-items:flex-start}
+.mtitle{font-size:20px;font-weight:800;letter-spacing:-0.5px}
+.mtitle span{color:var(--accent)}
+.cbtn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all 0.2s;flex-shrink:0}
+.cbtn:hover{border-color:var(--danger);color:var(--danger)}
+.mbody{padding:16px 24px 24px}
+.etabs{display:flex;gap:4px;margin-bottom:18px;flex-wrap:wrap}
+.etab{font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 12px;border:1px solid var(--border2);border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s}
+.etab.active{background:rgba(0,229,160,0.09);border-color:var(--accent);color:var(--accent)}
+.eblock{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:14px;margin-bottom:12px;line-height:1.7}
+.eblock h3{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;font-family:'JetBrains Mono',monospace}
+.eblock p{font-size:12px;color:#8fa0b4;margin-bottom:6px}
+.eblock ul{padding-left:15px}
+.eblock li{font-size:12px;color:#8fa0b4;margin-bottom:3px}
+.eblock code{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--accent2);padding:1px 5px;border-radius:3px;font-size:11px}
+.pseudo{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:2;color:#8fa0b4;margin-top:7px;white-space:pre;overflow-x:auto}
+.kw{color:var(--info)}.fn{color:var(--accent)}.cm2{color:var(--muted)}.st{color:var(--accent2)}
+.crow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ccard{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px;text-align:center}
+.ccard .ct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:5px;letter-spacing:1px}
+.ccard .cv2{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--accent2);font-weight:700}
+.ccard .cd{font-size:10px;color:var(--muted);margin-top:3px}
+.sti{display:flex;gap:10px;margin-bottom:11px;align-items:flex-start}
+.sn{min-width:24px;height:24px;background:rgba(0,229,160,0.09);border:1px solid rgba(0,229,160,0.22);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;flex-shrink:0}
+.st2{font-size:12px;color:#8fa0b4;line-height:1.65;padding-top:2px}
+.st2 strong{color:var(--text);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- 3D INTRO -->
+<div id="intro">
+  <canvas id="intro-canvas"></canvas>
+  <div class="intro-text">
+    <div class="intro-title">Mine<span>Tracer</span></div>
+    <div class="intro-sub">Backtracking · Pathfinding · DAA Visualizer</div>
+    <div class="intro-bar"><div class="intro-bar-fill"></div></div>
+    <button class="intro-skip" onclick="skipIntro()">Skip intro →</button>
+  </div>
+</div>
+
+<!-- HOW TO PLAY -->
+<div id="howtoplay">
+  <div class="htp-box">
+    <div class="htp-head">
+      <div class="htp-title">How to <span>Play</span></div>
+      <button class="cbtn" onclick="closeHTP()">✕</button>
+    </div>
+    <div class="htp-body">
+      <div class="htp-steps">
+        <div class="htp-step"><div class="htp-icon">⚙️</div><div><h4>Step 1 — Configure</h4><p>Pick a grid size (start with 6×6!) and mine density. Lower density = easier path to find.</p></div></div>
+        <div class="htp-step"><div class="htp-icon">💣</div><div><h4>Step 2 — Build the Minefield</h4><p>Click "New Minefield" to auto-generate with guaranteed path. Or click cells to manually toggle mines on/off.</p></div></div>
+        <div class="htp-step"><div class="htp-icon">▶️</div><div><h4>Step 3 — Watch the Algorithm</h4><p>Hit "Solve". Watch backtracking explore in real time — slow the speed down to see every decision!</p></div></div>
+        <div class="htp-step"><div class="htp-icon">📚</div><div><h4>Step 4 — Learn the Concept</h4><p>After solving, a banner appears. Click "See step-by-step explanation" to understand what just happened.</p></div></div>
+      </div>
+      <div class="htp-leg-grid">
+        <div class="hleg"><div class="hdot" style="background:rgba(0,229,160,0.2);border-color:var(--accent)"></div>Start (S)</div>
+        <div class="hleg"><div class="hdot" style="background:rgba(77,159,255,0.2);border-color:var(--info)"></div>End (E)</div>
+        <div class="hleg"><div class="hdot" style="background:#111520;border-color:#28334a"></div>Mine 💣</div>
+        <div class="hleg"><div class="hdot" style="background:#0b1f18"></div>Visited</div>
+        <div class="hleg"><div class="hdot" style="background:rgba(0,229,160,0.2);border-color:rgba(0,229,160,0.45)"></div>Best path ●</div>
+        <div class="hleg"><div class="hdot" style="background:#200d0d"></div>Backtracked ✗</div>
+        <div class="hleg"><div class="hdot" style="background:rgba(245,200,66,0.14);border-color:var(--accent2)"></div>Current ★</div>
+      </div>
+      <button class="htp-play" onclick="closeHTP()">▶ Let's Go!</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPLAINER -->
+<div class="overlay" id="explainer">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="mtitle">How <span>Backtracking</span> Works</div>
+      <button class="cbtn" onclick="closeExp()">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="etabs">
+        <button class="etab active" onclick="eTab('concept')">Concept</button>
+        <button class="etab" onclick="eTab('steps')">Step-by-Step</button>
+        <button class="etab" onclick="eTab('pseudo')">Pseudocode</button>
+        <button class="etab" onclick="eTab('complexity')">Complexity</button>
+        <button class="etab" onclick="eTab('compare')">vs BFS/DFS</button>
+      </div>
+      <div id="ec-concept">
+        <div class="eblock"><h3>What is Backtracking?</h3><p>Backtracking is a recursive algorithm that systematically tries every possible path. Like navigating a maze — when you hit a dead end, retrace your steps and try a new direction.</p><p>This algorithm tries every route from <code>S(0,0)</code> to <code>E(N-1,N-1)</code>, skipping mines, and records the shortest safe path found.</p></div>
+        <div class="eblock"><h3>Pruning — The Power Move</h3><p>If the current path is already longer than the best path found so far, the algorithm immediately abandons that branch. This "pruning" avoids millions of pointless routes.</p></div>
+        <div class="eblock"><h3>Key Properties</h3><ul><li>Moves in 4 directions: up, down, left, right</li><li>Marks cells visited to avoid cycles</li><li>After exploring a branch, <strong>unmarks cells</strong> so other paths can use them</li><li>Guarantees the <strong>shortest path</strong> by exhaustive search</li></ul></div>
+      </div>
+      <div id="ec-steps" style="display:none">
+        <div class="eblock"><h3>Algorithm Step-by-Step</h3>
+          <div class="sti"><div class="sn">1</div><div class="st2"><strong>Start at (0,0).</strong> Mark visited. Add to current path.</div></div>
+          <div class="sti"><div class="sn">2</div><div class="st2"><strong>Check 4 neighbors.</strong> In bounds? Not a mine? Not already visited in THIS branch?</div></div>
+          <div class="sti"><div class="sn">3</div><div class="st2"><strong>Prune.</strong> If path length ≥ best found, stop exploring this branch.</div></div>
+          <div class="sti"><div class="sn">4</div><div class="st2"><strong>Recurse.</strong> Move to valid neighbor and repeat from step 1.</div></div>
+          <div class="sti"><div class="sn">5</div><div class="st2"><strong>Goal reached!</strong> Update best path if this one is shorter.</div></div>
+          <div class="sti"><div class="sn">6</div><div class="st2"><strong>Backtrack.</strong> Remove current cell from path. Try next direction from parent.</div></div>
+          <div class="sti"><div class="sn">7</div><div class="st2"><strong>Done</strong> when all branches exhausted. Best path is the answer.</div></div>
+        </div>
+      </div>
+      <div id="ec-pseudo" style="display:none">
+        <div class="eblock"><h3>Pseudocode</h3>
+<div class="pseudo"><span class="fn">SOLVE</span>(grid, N):
+  bestPath ← []
+
+  <span class="kw">function</span> <span class="fn">BACKTRACK</span>(row, col, path, visited):
+
+    <span class="cm2">▸ Prune invalid / already-visited</span>
+    <span class="kw">if</span> out-of-bounds OR mine OR visited  → <span class="kw">return</span>
+    <span class="kw">if</span> len(path)+1 ≥ len(bestPath) > 0  → <span class="kw">return</span>
+
+    <span class="cm2">▸ Choose this cell</span>
+    visited.add(row, col)
+    path.append((row, col))
+
+    <span class="kw">if</span> (row,col) == (N-1,N-1):
+      bestPath ← copy(path)   <span class="cm2">▸ New best!</span>
+    <span class="kw">else</span>:
+      <span class="kw">for</span> (dr,dc) <span class="kw">in</span> [UP,DOWN,LEFT,RIGHT]:
+        <span class="fn">BACKTRACK</span>(row+dr, col+dc,
+                   path, copy(visited))
+
+    <span class="cm2">▸ Unchoose (backtrack!)</span>
+    path.pop()
+
+  <span class="fn">BACKTRACK</span>(0, 0, [], {})
+  <span class="kw">return</span> bestPath</div></div>
+      </div>
+      <div id="ec-complexity" style="display:none">
+        <div class="eblock"><h3>Time & Space Complexity</h3><div class="crow"><div class="ccard"><div class="ct">TIME WORST CASE</div><div class="cv2">O(4^N²)</div><div class="cd">4 branches per cell</div></div><div class="ccard"><div class="ct">SPACE STACK</div><div class="cv2">O(N²)</div><div class="cd">Max recursion depth</div></div></div></div>
+        <div class="eblock"><h3>With Pruning (Real World)</h3><ul><li>Mines eliminate whole subtrees instantly</li><li>Length bound cuts suboptimal branches</li><li>Actual perf far exceeds worst-case theory</li><li>On 8×8 with 20% mines: typically &lt;500 steps!</li></ul></div>
+      </div>
+      <div id="ec-compare" style="display:none">
+        <div class="eblock"><h3>Comparison</h3>
+          <table style="width:100%;font-size:11px;font-family:'JetBrains Mono',monospace;border-collapse:collapse">
+            <thead><tr style="border-bottom:1px solid var(--border2)"><th style="text-align:left;padding:6px;color:var(--muted)">Feature</th><th style="padding:6px;color:var(--accent)">Backtracking</th><th style="padding:6px;color:var(--info)">BFS</th><th style="padding:6px;color:var(--accent2)">DFS</th></tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;color:var(--muted)">Shortest path</td><td style="padding:6px;text-align:center">✓</td><td style="padding:6px;text-align:center;color:var(--info)">✓</td><td style="padding:6px;text-align:center;color:var(--danger)">✗</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;color:var(--muted)">Time</td><td style="padding:6px;text-align:center">O(4^N²)*</td><td style="padding:6px;text-align:center;color:var(--info)">O(N²)</td><td style="padding:6px;text-align:center;color:var(--accent2)">O(N²)</td></tr>
+              <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;color:var(--muted)">All paths explored</td><td style="padding:6px;text-align:center">✓</td><td style="padding:6px;text-align:center;color:var(--danger)">✗</td><td style="padding:6px;text-align:center;color:var(--danger)">✗</td></tr>
+              <tr><td style="padding:6px;color:var(--muted)">Technique</td><td style="padding:6px;text-align:center">Exhaustive+Prune</td><td style="padding:6px;text-align:center;color:var(--info)">Level-order</td><td style="padding:6px;text-align:center;color:var(--accent2)">Recursive</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:10px;color:var(--muted);margin-top:8px">* Pruning makes practical perf much better</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Mine<span>Tracer</span></div>
+  <div class="nav-links">
+    <button class="nav-btn" onclick="document.getElementById('howtoplay').classList.add('show')">How to Play</button>
+    <button class="nav-btn" onclick="openExp('concept')">Learn Algorithm</button>
+  </div>
+</nav>
+
+<!-- APP -->
+<div class="main">
+  <div class="app-grid">
+    <!-- LEFT PANEL -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel">
+        <div class="ph"><div class="dot"></div>Configuration</div>
+        <div class="pb">
+          <div class="cg">
+            <div class="cl">Grid size <span id="szLbl">8×8</span></div>
+            <select id="gridSize" onchange="document.getElementById('szLbl').textContent=this.value+'×'+this.value">
+              <option value="6">6×6 — Easy</option>
+              <option value="8" selected>8×8 — Medium</option>
+              <option value="10">10×10 — Hard</option>
+              <option value="12">12×12 — Expert</option>
+            </select>
+          </div>
+          <div class="cg">
+            <div class="cl">Mine density <span id="densLbl">20%</span></div>
+            <input type="range" id="density" min="8" max="40" value="20" step="1"
+              oninput="document.getElementById('densLbl').textContent=this.value+'%'"/>
+          </div>
+          <div class="cg">
+            <div class="cl">Speed <span id="spdLbl">Normal</span></div>
+            <input type="range" id="speed" min="1" max="5" value="3" step="1" oninput="setSpeedLabel()"/>
+          </div>
+          <div class="abtns">
+            <button class="abtn abtn-solve" id="btnSolve" disabled onclick="toggleSolve()">▶ Solve</button>
+            <button class="abtn abtn-gen" onclick="generateGrid()">⟳ New Minefield</button>
+            <button class="abtn abtn-ghost" onclick="clearViz()">✕ Clear Visualization</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="dot"></div>Live Stats</div>
+        <div class="pb">
+          <div class="sgrid">
+            <div class="sc"><div class="sl">STEPS</div><div class="sv a" id="sSteps">—</div></div>
+            <div class="sc"><div class="sl">BACKTRACKS</div><div class="sv w" id="sBack">—</div></div>
+            <div class="sc"><div class="sl">PATH LEN</div><div class="sv" id="sPath">—</div></div>
+            <div class="sc"><div class="sl">STATUS</div><div class="sv" id="sStatus" style="font-size:11px">Idle</div></div>
+          </div>
+          <div class="logbox" id="logBox"><div>// Generate a grid, then hit Solve.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: GRID -->
+    <div class="panel" style="min-width:0">
+      <div class="mode-bar">
+        <button class="mpill active" id="mNormal" onclick="setMode('normal')">Click to Toggle</button>
+        <button class="mpill" id="mMine" onclick="setMode('mine')">✏ Place Mines</button>
+        <button class="mpill" id="mErase" onclick="setMode('erase')">✕ Erase Mines</button>
+      </div>
+      <div id="grid-wrap"></div>
+      <div class="rbanner" id="rbanner"></div>
+      <div class="legend">
+        <div class="leg"><div class="ldot" style="background:rgba(0,229,160,0.18);border-color:var(--accent)"></div>Start/End</div>
+        <div class="leg"><div class="ldot" style="background:#0b1f18"></div>Visited</div>
+        <div class="leg"><div class="ldot" style="background:rgba(0,229,160,0.2);border-color:rgba(0,229,160,0.45)"></div>Path</div>
+        <div class="leg"><div class="ldot" style="background:#200d0d"></div>Backtrack</div>
+        <div class="leg"><div class="ldot" style="background:rgba(245,200,66,0.14);border-color:var(--accent2)"></div>Current ★</div>
+        <div class="leg"><div class="ldot" style="background:#111520"></div>Mine 💣</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══ 3D INTRO ═══ */
+(function(){
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+  s.onload=initThree;
+  s.onerror=()=>setTimeout(dismissIntro,400);
+  document.head.appendChild(s);
+})();
+
+function initThree(){
+  try{
+    const canvas=document.getElementById('intro-canvas');
+    const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.setClearColor(0x060810,1);
+
+    const scene=new THREE.Scene();
+    const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,100);
+    camera.position.set(0,7,14);camera.lookAt(0,0,0);
+
+    const ROWS=8,COLS=8;
+    const floorGeo=new THREE.BoxGeometry(0.82,0.12,0.82);
+    const mats={
+      safe:new THREE.MeshStandardMaterial({color:0x12161d,metalness:0.2,roughness:0.8}),
+      path:new THREE.MeshStandardMaterial({color:0x003d2a,metalness:0.4,roughness:0.4,emissive:0x001a10,emissiveIntensity:0.8}),
+      start:new THREE.MeshStandardMaterial({color:0x00e5a0,metalness:0.6,roughness:0.2,emissive:0x00e5a0,emissiveIntensity:0.3}),
+      mine:new THREE.MeshStandardMaterial({color:0x1a0808,metalness:0.1,roughness:0.9})
+    };
+
+    const mines=new Set([3,6,10,15,19,23,28,33,38,43,47,51]);
+    const path=new Set([0,8,16,17,18,26,34,42,50,58,59,60,61,62,63]);
+
+    const allMeshes=[];
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const idx=r*COLS+c;
+        let mat=mats.safe;
+        if(idx===0||idx===63) mat=mats.start;
+        else if(path.has(idx)) mat=mats.path;
+        else if(mines.has(idx)) mat=mats.mine;
+        const m=new THREE.Mesh(floorGeo,mat);
+        m.position.set(c*1.02-COLS*0.51+0.51,0,r*1.02-ROWS*0.51+0.51);
+        m.scale.y=0.01;
+        m.userData.t0=idx*0.012;
+        scene.add(m);allMeshes.push({m,isSphere:false});
+      }
+    }
+
+    const sGeo=new THREE.SphereGeometry(0.2,10,10);
+    const sMat=new THREE.MeshStandardMaterial({color:0xff3333,metalness:0.8,roughness:0.15,emissive:0x660000,emissiveIntensity:0.6});
+    mines.forEach(idx=>{
+      const r=Math.floor(idx/COLS),c=idx%COLS;
+      const m=new THREE.Mesh(sGeo,sMat);
+      m.position.set(c*1.02-COLS*0.51+0.51,0.28,r*1.02-ROWS*0.51+0.51);
+      m.scale.set(0.01,0.01,0.01);
+      m.userData.t0=idx*0.012+0.35;
+      scene.add(m);allMeshes.push({m,isSphere:true});
+    });
+
+    scene.add(new THREE.AmbientLight(0xffffff,0.35));
+    const dl=new THREE.DirectionalLight(0x00e5a0,1.4);dl.position.set(4,10,4);scene.add(dl);
+    const dl2=new THREE.DirectionalLight(0x4d9fff,0.5);dl2.position.set(-6,7,-3);scene.add(dl2);
+    const pl=new THREE.PointLight(0x00e5a0,2.5,18);pl.position.set(0,4,0);scene.add(pl);
+
+    window.addEventListener('resize',()=>{
+      camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth,innerHeight);
+    });
+
+    let t=0,alive=true;
+    window._stopIntro3d=()=>{alive=false;};
+    (function loop(){
+      if(!alive)return;
+      requestAnimationFrame(loop);
+      t+=0.016;
+      camera.position.x=Math.sin(t*0.28)*2.5;
+      camera.position.y=7+Math.sin(t*0.18)*0.8;
+      camera.lookAt(0,0,0);
+      pl.intensity=2+Math.sin(t*2.5)*0.7;
+      allMeshes.forEach(({m,isSphere})=>{
+        const p=Math.max(0,Math.min(1,(t-m.userData.t0)*4));
+        const e=p<1?p:1;
+        if(isSphere) m.scale.set(e,e,e);
+        else m.scale.y=Math.max(0.01,e);
+      });
+      renderer.render(scene,camera);
+    })();
+
+    setTimeout(()=>{if(alive){alive=false;dismissIntro();}},4000);
+  }catch(e){dismissIntro();}
+}
+
+function skipIntro(){if(window._stopIntro3d)window._stopIntro3d();dismissIntro();}
+function dismissIntro(){
+  const el=document.getElementById('intro');
+  el.style.transition='opacity 0.7s';el.style.opacity='0';
+  setTimeout(()=>{el.style.display='none';document.getElementById('howtoplay').classList.add('show');},700);
+}
+
+/* ═══ GAME ENGINE ═══ */
+let N=8,grid=[],bestPath=[],running=false,stopFlag=false;
+let steps=0,backs=0,editMode='normal';
+const DIRS=[[-1,0],[1,0],[0,-1],[0,1]];
+const SPEEDS=[650,250,80,20,2];
+
+function getDelay(){return SPEEDS[+document.getElementById('speed').value-1];}
+function setSpeedLabel(){
+  const l=['Very Slow','Slow','Normal','Fast','Instant'];
+  document.getElementById('spdLbl').textContent=l[+document.getElementById('speed').value-1];
+}
+function setMode(m){
+  editMode=m;
+  ['Normal','Mine','Erase'].forEach(x=>document.getElementById('m'+x).classList.toggle('active',m===x.toLowerCase()));
+}
+function addLog(msg,cls){
+  const b=document.getElementById('logBox');
+  const d=document.createElement('div');if(cls)d.className=cls;
+  d.textContent=msg;b.insertBefore(d,b.firstChild);
+  while(b.children.length>30)b.removeChild(b.lastChild);
+}
+
+/* BFS check to guarantee path exists */
+function hasPath(){
+  const vis=new Set(['0,0']),q=[[0,0]];
+  while(q.length){
+    const[r,c]=q.shift();
+    if(r===N-1&&c===N-1)return true;
+    for(const[dr,dc]of DIRS){
+      const nr=r+dr,nc=c+dc,k=nr+','+nc;
+      if(nr>=0&&nr<N&&nc>=0&&nc<N&&grid[nr][nc]===0&&!vis.has(k)){vis.add(k);q.push([nr,nc]);}
+    }
+  }return false;
+}
+
+function generateGrid(){
+  if(running){stopFlag=true;return;}
+  N=+document.getElementById('gridSize').value;
+  const d=+document.getElementById('density').value/100;
+  let att=0;
+  do{
+    grid=Array.from({length:N},(_,r)=>Array.from({length:N},(_,c)=>{
+      if((r===0&&c===0)||(r===N-1&&c===N-1))return 0;
+      return Math.random()<d?1:0;
+    }));att++;
+  }while(!hasPath()&&att<300);
+  bestPath=[];steps=0;backs=0;
+  renderGrid();clearStats();
+  document.getElementById('btnSolve').disabled=false;
+  document.getElementById('rbanner').style.display='none';
+  addLog('// Grid '+N+'×'+N+' ready (path guaranteed)');
+}
+
+function clearStats(){
+  ['sSteps','sBack','sPath'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('sStatus').textContent='Idle';
+  document.getElementById('sStatus').style.color='';
+}
+
+function renderGrid(visited=new Set(),pathSet=new Set(),backSet=new Set(),cur=null){
+  const wrap=document.getElementById('grid-wrap');
+  const cs=Math.max(26,Math.min(54,Math.floor((wrap.clientWidth-28)/N)));
+  const fs=cs>40?15:cs>30?12:10;
+  let h='<table style="border-collapse:collapse;margin:0 auto">';
+  for(let r=0;r<N;r++){
+    h+='<tr>';
+    for(let c=0;c<N;c++){
+      const k=r+','+c;
+      let cl='ce2',t='';
+      if(r===0&&c===0){cl='cs';t='S';}
+      else if(r===N-1&&c===N-1){cl='ce';t='E';}
+      else if(grid[r][c]===1){cl='cm';t='💣';}
+      else if(k===cur){cl='cc';t='★';}
+      else if(pathSet.has(k)){cl='cp';t='●';}
+      else if(backSet.has(k)){cl='cbk';t='✗';}
+      else if(visited.has(k)){cl='cv';t='·';}
+      h+=`<td class="${cl}" style="width:${cs}px;height:${cs}px;font-size:${fs}px" onclick="toggleCell(${r},${c})">${t}</td>`;
+    }h+='</tr>';
+  }h+='</table>';
+  wrap.innerHTML=h;
+}
+
+function toggleCell(r,c){
+  if(running)return;
+  if((r===0&&c===0)||(r===N-1&&c===N-1))return;
+  if(editMode==='mine')grid[r][c]=1;
+  else if(editMode==='erase')grid[r][c]=0;
+  else grid[r][c]=grid[r][c]===1?0:1;
+  renderGrid();
+}
+
+function clearViz(){
+  if(running)return;
+  bestPath=[];steps=0;backs=0;clearStats();renderGrid();
+  document.getElementById('rbanner').style.display='none';
+  addLog('// Cleared');
+}
+
+async function toggleSolve(){
+  if(running){stopFlag=true;return;}
+  stopFlag=false;running=true;steps=0;backs=0;bestPath=[];
+  const btn=document.getElementById('btnSolve');
+  btn.textContent='■ Stop';btn.style.background='var(--danger)';btn.style.color='#fff';
+  document.getElementById('sStatus').textContent='Running…';
+  document.getElementById('sStatus').style.color='var(--accent)';
+  document.getElementById('rbanner').style.display='none';
+  addLog('// Backtracking (0,0) → ('+(N-1)+','+(N-1)+')','ll');
+
+  const backSet=new Set();
+  await bt(0,0,[],new Set(),backSet);
+
+  running=false;stopFlag=false;
+  btn.textContent='▶ Solve';btn.style.background='';btn.style.color='';
+
+  const ps=new Set(bestPath.map(([r,c])=>r+','+c));
+  /* Final render: show all visited, best path, backtracks */
+  renderGrid(new Set(),ps,backSet,null);
+
+  const bn=document.getElementById('rbanner');
+  if(bestPath.length>0){
+    document.getElementById('sPath').textContent=bestPath.length;
+    document.getElementById('sStatus').textContent='✓ Found!';
+    document.getElementById('sStatus').style.color='var(--accent)';
+    addLog('// Done! Path='+bestPath.length+' | Steps='+steps+' | Backs='+backs,'ld');
+    bn.className='rbanner ok';bn.style.display='block';
+    bn.innerHTML='✓ Shortest safe path: <strong>'+bestPath.length+' cells</strong> &nbsp;·&nbsp; '+steps+' steps explored &nbsp;·&nbsp; '+backs+' backtracks'
+      +'<br><span style="color:#4a6070">Understand how? </span><span class="elink" onclick="openExp(\'steps\')">See step-by-step explanation →</span>';
+  }else{
+    document.getElementById('sStatus').textContent='No path!';
+    document.getElementById('sStatus').style.color='var(--danger)';
+    addLog('// No path — all routes blocked','lf');
+    bn.className='rbanner fail';bn.style.display='block';
+    bn.innerHTML='✗ No safe path exists — all routes blocked.<br>'
+      +'<span class="elink" onclick="generateGrid()">Generate a new grid</span> or <span class="elink" onclick="openExp(\'concept\')">learn why →</span>';
+  }
+  document.getElementById('sSteps').textContent=steps;
+  document.getElementById('sBack').textContent=backs;
+}
+
+/*
+  CORRECT backtracking for shortest path:
+  Each recursive call gets its OWN copy of visited (new Set(visited))
+  so different branches can reuse the same cells.
+  bestPath length is used for pruning.
+*/
+async function bt(r,c,path,visited,backSet){
+  if(stopFlag)return;
+  if(r<0||r>=N||c<0||c>=N)return;
+  if(grid[r][c]===1)return;
+  const k=r+','+c;
+  if(visited.has(k))return;
+  if(bestPath.length>0&&path.length+1>=bestPath.length)return;
+
+  steps++;
+  const vis2=new Set(visited);vis2.add(k);
+  path.push([r,c]);
+  document.getElementById('sSteps').textContent=steps;
+  document.getElementById('sBack').textContent=backs;
+
+  const ps=new Set(path.map(([a,b])=>a+','+b));
+  renderGrid(vis2,ps,backSet,k);
+
+  if(r===N-1&&c===N-1){
+    bestPath=[...path];
+    addLog('// Path found: '+bestPath.length+' cells','ll');
+  }else{
+    if(getDelay()>0)await new Promise(res=>setTimeout(res,getDelay()));
+    for(const[dr,dc]of DIRS){
+      if(stopFlag)break;
+      await bt(r+dr,c+dc,path,vis2,backSet);
+    }
+    if(!(r===0&&c===0)&&!(r===N-1&&c===N-1)){backSet.add(k);backs++;}
+  }
+  path.pop();
+}
+
+/* ═══ EXPLAINER ═══ */
+function openExp(tab){document.getElementById('explainer').classList.add('show');eTab(tab||'concept');}
+function closeExp(){document.getElementById('explainer').classList.remove('show');}
+function eTab(name){
+  const tabs=['concept','steps','pseudo','complexity','compare'];
+  document.querySelectorAll('.etab').forEach((b,i)=>b.classList.toggle('active',tabs[i]===name));
+  tabs.forEach(t=>{document.getElementById('ec-'+t).style.display=t===name?'block':'none';});
+}
+document.getElementById('explainer').addEventListener('click',e=>{if(e.target===document.getElementById('explainer'))closeExp();});
+
+/* ═══ HOW TO PLAY ═══ */
+function closeHTP(){
+  document.getElementById('howtoplay').classList.remove('show');
+  if(!grid.length)generateGrid();
+}
+document.getElementById('howtoplay').addEventListener('click',e=>{if(e.target===document.getElementById('howtoplay'))closeHTP();});
+</script>
+</body>
+</html>
